@@ -11,9 +11,20 @@ function buildSVChartDataFromApi(numberInfoList, selectedSample) {
 
   console.log("matched target:", target);
 
-  if (!target?.data) return [];
+  if (!target) {
+    console.warn("❌ No matched sample", {
+      selectedSample,
+      apiSamples: numberInfoList.map((item) => item.sample),
+    });
+    return [];
+  }
 
-  const preq = target.data.preq ?? [];
+  if (!target.data) {
+    console.warn("❌ Matched sample exists, but data is missing", target);
+    return [];
+  }
+
+  const preq = target.data.preq ?? target.data.freq ?? [];
   const spec = target.data.spec ?? [];
   const rattle = target.data.rattle ?? [];
 
@@ -22,39 +33,17 @@ function buildSVChartDataFromApi(numberInfoList, selectedSample) {
   console.log("rattle length:", rattle.length);
   console.log("first:", preq[0], spec[0], rattle[0]);
 
-  ...
+  const length = Math.min(preq.length, spec.length, rattle.length);
+
+  return Array.from({ length }, (_, i) => ({
+    x: Number(preq[i]),
+    spec: Number(spec[i]),
+    measurement: Number(rattle[i]),
+    margin: Number(spec[i]) - Number(rattle[i]),
+  })).filter(
+    (d) =>
+      Number.isFinite(d.x) &&
+      Number.isFinite(d.spec) &&
+      Number.isFinite(d.measurement)
+  );
 }
-
-const preq = target.data.preq ?? target.data.freq ?? [];
-
-
-const handleOpenDetail = async (model, testCase) => {
-  setSelectedModel(model);
-  setSelectedTestCase(testCase);
-  setSelectedSample("");
-  setIsDetailOpen(true);
-
-  setSampleInfo([]);
-  setBigData([]);
-  setAttachments([]);
-  setExcelData([]);
-  setSvRawNumberInfo([]);
-  setSvHoverPoint(null);
-
-  await fetchModelData(model);
-};
-
-onClick={(e) => {
-  e.stopPropagation();
-  handleOpenDetail(model, "Sound Vibration");
-}}
-
-onClick={(e) => {
-  e.stopPropagation();
-  handleOpenDetail(model, "Stick-Slip");
-}}
-
-setSelectedModel({
-  ...model,
-  sample_count: sampleCount,
-});
