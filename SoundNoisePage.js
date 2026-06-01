@@ -191,7 +191,7 @@ function getSVRootPath(model) {
 
 function buildSVChartDataFromApi(numberInfoList, selectedSample) {
   const target = numberInfoList.find(
-    (item) => String(item.number) === String(selectedSample)
+    (item) => String(item.sample) === String(selectedSample)
   );
 
   if (!target?.data) return [];
@@ -3092,8 +3092,35 @@ export default function SoundNoisePage() {
     return modelMap; // Model_PK → sample_list
   };
 
+  // const loadSVRawDataFromApi = async ({ model }) => {
+  //   const rootPath = getSVRootPath(model);
+
+  //   if (!rootPath || !model?.id) {
+  //     return [];
+  //   }
+
+  //   const res = await axios.get(`${BASE_URL()}/sound/file/sv/raw-data`, {
+  //     params: {
+  //       root_path: rootPath,
+  //       no: model.id,
+  //       target_test_type: "SV",
+  //     },
+  //   });
+
+  //   const files = res.data?.files ?? [];
+  //   if (!files.length) return [];
+
+  //   const firstFile = files[0];
+  //   return firstFile.number_info ?? [];
+  // };
+
   const loadSVRawDataFromApi = async ({ model }) => {
     const rootPath = getSVRootPath(model);
+
+    console.log("===== SV API Request Debug =====");
+    console.log("model.id:", model?.id);
+    console.log("model.measured_site:", model?.measured_site);
+    console.log("rootPath:", rootPath);
 
     if (!rootPath || !model?.id) {
       return [];
@@ -3107,10 +3134,17 @@ export default function SoundNoisePage() {
       },
     });
 
+    console.log("SV API response:", res.data);
+
     const files = res.data?.files ?? [];
+    console.log("files length:", files.length);
+
     if (!files.length) return [];
 
     const firstFile = files[0];
+    console.log("firstFile:", firstFile);
+    console.log("number_info:", firstFile.number_info);
+
     return firstFile.number_info ?? [];
   };
 
