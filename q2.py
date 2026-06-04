@@ -1,37 +1,30 @@
-function normalizeSample(sample) {
-  const str = String(sample ?? "").trim();
+<TableRow
+  sx={{
+    "& .MuiTableCell-root": {
+      position: "sticky",
+      top: 0,
+      zIndex: 20,
+      backgroundColor: "#f7f8fa",
+    },
+  }}
+>
 
-  if (/^\d+$/.test(str)) {
-    return String(Number(str));
-  }
 
-  return str.toUpperCase();
-}
 
-function buildSVChartDataFromApi(numberInfoList, selectedSample) {
-  const normalizedSelectedSample = normalizeSample(selectedSample);
+<TableRow
+  className="filter-row"
+  sx={{
+    "& .MuiTableCell-root": {
+      position: "sticky",
+      top: "40px", // 제목행 높이만큼
+      zIndex: 19,
+      backgroundColor: "#ffffff",
+      fontWeight: 400,
+      boxShadow: "inset 0 -0.5px 0 #e5e7eb",
+      padding: "2px",
+    },
+  }}
+>
 
-  const target = numberInfoList.find(
-    (item) => normalizeSample(item.sample) === normalizedSelectedSample
-  );
 
-  if (!target?.data) return [];
 
-  const preq = target.data.preq ?? target.data.freq ?? [];
-  const spec = target.data.spec ?? [];
-  const rattle = target.data.rattle ?? [];
-
-  const length = Math.min(preq.length, spec.length, rattle.length);
-
-  return Array.from({ length }, (_, i) => ({
-    x: Number(preq[i]),
-    spec: Number(spec[i]),
-    measurement: Number(rattle[i]),
-    margin: Number(spec[i]) - Number(rattle[i]),
-  })).filter(
-    (d) =>
-      Number.isFinite(d.x) &&
-      Number.isFinite(d.spec) &&
-      Number.isFinite(d.measurement)
-  );
-}
