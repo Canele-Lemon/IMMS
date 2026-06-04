@@ -189,14 +189,26 @@ function getSVRootPath(model) {
   return null;
 }
 
+function normalizeSample(sample) {
+  const str = String(sample ?? "").trim();
+
+  if (/^\d+$/.test(str)) {
+    return String(Number(str));
+  }
+
+  return str.toUpperCase();
+}
+
 function buildSVChartDataFromApi(numberInfoList, selectedSample) {
+  const normalizedSelectedSample = normalizeSample(selectedSample);
+
   const target = numberInfoList.find(
-    (item) => String(item.sample) === String(selectedSample)
+    (item) => normalizeSample(item.sample) === normalizedSelectedSample
   );
 
   if (!target?.data) return [];
 
-  const preq = target.data.preq ?? [];
+  const preq = target.data.preq ?? target.data.freq ?? [];
   const spec = target.data.spec ?? [];
   const rattle = target.data.rattle ?? [];
 
@@ -216,35 +228,59 @@ function buildSVChartDataFromApi(numberInfoList, selectedSample) {
 }
 
 function calculateSampleCount(model_PK, sample_list) {
-  const rows = sample_list.filter(
+  const summaryRows = sample_list.filter(
+    (s) => s.Model_PK === model_PK && s.Sample_No === "Summary"
+  );
+
+  const hasStickSlipSummary = summaryRows.some(
+    (s) => normalizeItem(s.Item) === "Stick-Slip"
+  );
+
+  const hasSoundVibrationSummary = summaryRows.some(
+    (s) => normalizeItem(s.Item) === "Sound Vibration"
+  );
+
+  const sampleRows = sample_list.filter(
     (s) => s.Model_PK === model_PK && s.Sample_No !== "Summary"
   );
 
-  const totalSamples = new Set(rows.map((s) => s.Sample_No)).size;
+  const stickSlipSamples = hasStickSlipSummary
+    ? new Set(
+        sampleRows
+          .filter((s) => normalizeItem(s.Item) === "Stick-Slip")
+          .map((s) => s.Sample_No)
+      ).size
+    : 0;
 
-  const stickSlipSamples = new Set(
-    rows
-      .filter((s) => normalizeItem(s.Item) === "Stick-Slip")
-      .map((s) => s.Sample_No)
-  ).size;
-
-  const soundVibrationSamples = new Set(
-    rows.filter((s) => s.Item === "Sound Vibration").map((s) => s.Sample_No)
-  ).size;
+  const soundVibrationSamples = hasSoundVibrationSummary
+    ? new Set(
+        sampleRows
+          .filter((s) => normalizeItem(s.Item) === "Sound Vibration")
+          .map((s) => s.Sample_No)
+      ).size
+    : 0;
 
   return {
-    total: totalSamples,
+    total: stickSlipSamples + soundVibrationSamples,
     stick_slip: stickSlipSamples,
     sound_vibration: soundVibrationSamples,
+    has_stick_slip_summary: hasStickSlipSummary,
+    has_sound_vibration_summary: hasSoundVibrationSummary,
   };
 }
 
 function hasStickSlip(model) {
-  return model.sample_count.stick_slip > 0;
+  return (
+    model.sample_count.has_stick_slip_summary === true &&
+    model.sample_count.stick_slip > 0
+  );
 }
 
 function hasSoundVibration(model) {
-  return model.sample_count.sound_vibration > 0;
+  return (
+    model.sample_count.has_sound_vibration_summary === true &&
+    model.sample_count.sound_vibration > 0
+  );
 }
 
 function getWarmupTime(model) {
@@ -3075,9 +3111,8 @@ export default function SoundNoisePage() {
 
     const validRows = data.filter(
       (s) =>
-        s.Sample_No !== "Summary" &&
-        (normalizeItem(s.Item) === "Stick-Slip" ||
-          normalizeItem(s.Item) === "Sound Vibration")
+        normalizeItem(s.Item) === "Stick-Slip" ||
+        normalizeItem(s.Item) === "Sound Vibration"
     );
 
     const modelMap = new Map();
@@ -3089,30 +3124,8 @@ export default function SoundNoisePage() {
       modelMap.get(s.Model_PK).push(s);
     });
 
-    return modelMap; // Model_PK → sample_list
+    return modelMap;
   };
-
-  // const loadSVRawDataFromApi = async ({ model }) => {
-  //   const rootPath = getSVRootPath(model);
-
-  //   if (!rootPath || !model?.id) {
-  //     return [];
-  //   }
-
-  //   const res = await axios.get(`${BASE_URL()}/sound/file/sv/raw-data`, {
-  //     params: {
-  //       root_path: rootPath,
-  //       no: model.id,
-  //       target_test_type: "SV",
-  //     },
-  //   });
-
-  //   const files = res.data?.files ?? [];
-  //   if (!files.length) return [];
-
-  //   const firstFile = files[0];
-  //   return firstFile.number_info ?? [];
-  // };
 
   const loadSVRawDataFromApi = async ({ model }) => {
     const rootPath = getSVRootPath(model);
@@ -3333,6 +3346,22 @@ export default function SoundNoisePage() {
     if (DEBUG) console.log("selectedSample:", selectedSample);
   }, [selectedModel, selectedSample]);
 
+  const handleOpenDetail = async (model, testCase) => {
+    setSelectedModel(model);
+    setSelectedTestCase(testCase);
+    setSelectedSample("");
+    setIsDetailOpen(true);
+
+    setSampleInfo([]);
+    setBigData([]);
+    setAttachments([]);
+    setExcelData([]);
+    setSvRawNumberInfo([]);
+    setSvHoverPoint(null);
+
+    await fetchModelData(model);
+  };
+
   const fetchModelData = async (model) => {
     if (!model) return;
 
@@ -3366,7 +3395,7 @@ export default function SoundNoisePage() {
 
       // selectedModel에 반영
       setSelectedModel((prev) => ({
-        ...prev,
+        ...model,
         sample_count: sampleCount,
       }));
     } catch (e) {
@@ -4194,11 +4223,7 @@ export default function SoundNoisePage() {
                           disabled={!hasStickSlip(model)}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedModel(model);
-                            setSelectedTestCase("Stick-Slip");
-                            setSelectedSample("");
-                            setIsDetailOpen(true);
-                            fetchModelData(model);
+                            handleOpenDetail(model, "Stick-Slip");
                           }}
                         >
                           SS
@@ -4229,11 +4254,7 @@ export default function SoundNoisePage() {
                           disabled={!hasSoundVibration(model)}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedModel(model);
-                            setSelectedTestCase("Sound Vibration");
-                            setSelectedSample("");
-                            setIsDetailOpen(true);
-                            fetchModelData(model);
+                            handleOpenDetail(model, "Sound Vibration");
                           }}
                         >
                           SV
